@@ -50,7 +50,7 @@ class submission:
         self.submission_path = datadir/'submissions'/str(self.id)
         self.problem_path = datadir/'problems'/str(self.problem)
 
-        cursor.execute('SELECT * FROM `langs` WHERE id=?',(datas['lang'],))
+        cursor.execute('SELECT * FROM `langs` WHERE id=%s',(datas['lang'],))
         langinfo=cursor.fetch()
         self.execcmd=langinfo['exec'].replace('{path}',self.submission_path).split()
 
