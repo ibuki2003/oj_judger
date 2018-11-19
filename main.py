@@ -31,20 +31,6 @@ cursor=connection.cursor()
 
 datadir = Path(cfg.get('oj', 'datadir'))
 
-if __name__ == "__main__":
-    main()
-
-def main():
-    while True: # Main loop
-        sql = 'select * from `submissions` WHERE status in ("WJ","WR")'
-        cursor.execute(sql)
-        for row in cursor.fetchall():
-            print("judging:#",row['id'])
-            submission(row).judge()
-            connection.commit()
-        sleep(1)
-
-
 def terminate(signal, frame):
     global connection,cursor
     print('stopping')
@@ -215,3 +201,16 @@ class submission:
         global cursor
         sql = 'update submissions set status=%s,point=%s where id=%s'
         cursor.execute(sql, (stat,point,self.id))
+
+def main():
+    while True: # Main loop
+        sql = 'select * from `submissions` WHERE status in ("WJ","WR")'
+        cursor.execute(sql)
+        for row in cursor.fetchall():
+            print("judging:#",row['id'])
+            submission(row).judge()
+            connection.commit()
+        sleep(1)
+
+if __name__ == "__main__":
+    main()
