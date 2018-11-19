@@ -74,7 +74,7 @@ class submission:
             try:
                 starttime=time()
                 p = subprocess.Popen(self.execcmd, stdin=input_file, stdout=subprocess.PIPE)
-                out = p.communicate(timeout=cfg.getint('limits', 'time'))[0]
+                out = p.communicate(timeout=cfg.getint('limit', 'time'))[0]
                 exectime=int((time()-starttime)*1000)
             except subprocess.TimeoutExpired:
                 p.kill()
@@ -82,7 +82,7 @@ class submission:
             except subprocess.CalledProcessError:
                 return ("RE",None)
             
-            if len(out)>cfg.getint('limits', 'self.save')*1048576:
+            if len(out)>cfg.getint('limit', 'self.save')*1048576:
                 return ("OLE",None)
             else: # Execute OK
                 with open(str(self.problem_path/'out'/testcase), 'r') as ansfile:
