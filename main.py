@@ -51,7 +51,7 @@ class submission:
         self.problem_path = datadir/'problems'/str(self.problem)
 
         cursor.execute('SELECT * FROM `langs` WHERE id=%s',(datas['lang'],))
-        langinfo=cursor.fetch()
+        langinfo=cursor.fetchone()
         self.execcmd=langinfo['exec'].replace('{path}',self.submission_path).split()
 
         self.compile_required=langinfo['compile'] is not None
