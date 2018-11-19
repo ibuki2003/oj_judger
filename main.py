@@ -82,7 +82,7 @@ class submission:
             except subprocess.CalledProcessError:
                 return ("RE",None)
             
-            if len(out)>cfg.getint('limit', 'self.save')*1048576:
+            if len(out)>cfg.getint('limit', 'output')*1048576:
                 return ("OLE",None)
             else: # Execute OK
                 with open(str(self.problem_path/'out'/testcase), 'r') as ansfile:
@@ -184,6 +184,7 @@ class submission:
         except:
             print(traceback.format_exc())
             self.save('IE',point)
+            return
         else:
             if stats['RE']:
                 self.save('RE',point)
