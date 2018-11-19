@@ -109,6 +109,7 @@ class submission:
                 testcaselist=[]
                 for tcset in tcsets:
                     testcaselist.extend(tcset['problems'])
+                testcaselist=list(set(testcaselist)) # remove duplication
             else:
                 testcaselist = [str(file) for file in list((self.problem_path/'in').glob('*'))]
                 tcsets=[
