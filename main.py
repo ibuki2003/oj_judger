@@ -55,7 +55,8 @@ class submission:
         self.execcmd=langinfo['exec'].replace('{path}',str(self.submission_path)).split()
 
         self.compile_required=langinfo['compile'] is not None
-        self.compilecmd=langinfo['compile'].replace('{path}',str(self.submission_path)).split()
+        if(self.compile_required):
+            self.compilecmd=langinfo['compile'].replace('{path}',str(self.submission_path)).split()
     
     def compile(self):
         if not self.compile_required: # no compile
