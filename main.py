@@ -52,10 +52,10 @@ class submission:
 
         cursor.execute('SELECT * FROM `langs` WHERE id=%s',(datas['lang'],))
         langinfo=cursor.fetchone()
-        self.execcmd=langinfo['exec'].replace('{path}',self.submission_path).split()
+        self.execcmd=langinfo['exec'].replace('{path}',str(self.submission_path)).split()
 
         self.compile_required=langinfo['compile'] is not None
-        self.compilecmd=langinfo['compile'].replace('{path}',self.submission_path).split()
+        self.compilecmd=langinfo['compile'].replace('{path}',str(self.submission_path)).split()
     
     def compile(self):
         if not self.compile_required: # no compile
@@ -69,7 +69,7 @@ class submission:
         return True
     
     def judge_one(self, testcase):
-        with open(self.problem_path/'in'/testcase, 'r') as input_file:
+        with open(str(self.problem_path/'in'/testcase), 'r') as input_file:
             try:
                 starttime=time()
                 p = subprocess.Popen(self.execcmd, stdin=input_file, stdout=subprocess.PIPE)
@@ -84,7 +84,7 @@ class submission:
             if len(out)>cfg.getint('limits', 'self.save')*1048576:
                 return ("OLE",None)
             else: # Execute OK
-                with open(self.problem_path/'out'/testcase, 'r') as ansfile:
+                with open(str(self.problem_path/'out'/testcase), 'r') as ansfile:
                     anslist=ansfile.read().split()
                 outlist=out.decode('utf-8').split()
                 
@@ -104,7 +104,7 @@ class submission:
             point=0
 
             if (self.problem_path/'tcsets.json').exists():
-                with open(self.problem_path/'tcsets.json', 'r') as tcsetsfile:
+                with open(str(self.problem_path/'tcsets.json'), 'r') as tcsetsfile:
                     tcsets = json.load(tcsetsfile)
                 testcaselist=[]
                 for tcset in tcsets:
@@ -195,7 +195,7 @@ class submission:
             else:
                 self.save('AC',point)
 
-            with open(self.submission_path/'judge_log.json','w') as logfile:
+            with open(str(self.submission_path/'judge_log.json'),'w') as logfile:
                 logfile.write(json.dumps(result_data))
 
     def save(self,stat,point):
