@@ -70,7 +70,7 @@ class submission:
         return True
     
     def judge_one(self, testcase):
-        with open(str(self.problem_path/'in'/testcase), 'r') as input_file:
+        with open(str(testcase), 'r') as input_file:
             try:
                 starttime=time()
                 p = subprocess.Popen(self.execcmd, stdin=input_file, stdout=subprocess.PIPE)
@@ -85,7 +85,7 @@ class submission:
             if len(out)>cfg.getint('limit', 'output')*1048576:
                 return ("OLE",None)
             else: # Execute OK
-                with open(str(self.problem_path/'out'/testcase), 'r') as ansfile:
+                with open(str(testcase.parents[1]/'out'/testcase.name), 'r') as ansfile:
                     anslist=ansfile.read().split()
                 outlist=out.decode('utf-8').split()
                 
@@ -110,18 +110,20 @@ class submission:
                 testcaselist=[]
                 for tcset in tcsets:
                     testcaselist.extend(tcset['problems'])
-                testcaselist=list(set(testcaselist)) # remove duplication
+                testcaselist=[(self.problem_path/'in'/filename) for filename in set(testcaselist)] # remove duplication, make Path Obj
             else:
-                testcaselist = [str(file) for file in list((self.problem_path/'in').glob('*'))]
+                testcaselist = list((self.problem_path/'in').glob('*'))
+                testcasenamelist = [file.name for file in testcaselist]
+                testcasenamelist.sort()
+                
                 tcsets=[
                     {
                         "name":"all",
                         "point":100,
-                        "problems":testcaselist
+                        "problems":testcasenamelist
                     },
                 ]
             
-            testcaselist.sort()
 
             stats={
                 'RE': False,
@@ -139,25 +141,26 @@ class submission:
                 ret, exectime=self.judge_one(testcase)
                 if ret in ['RE','OLE','TLE']:
                     stats[ret]=True
-                    problem_results[testcase]={
+                    problem_results[testcase.name]={
                         'status': ret
                     }
                 elif ret=='WA':
                     stats[ret]=True
-                    problem_results[testcase]={
+                    problem_results[testcase.name]={
                         'status': ret,
                         'time': exectime
                     }
                 else:
-                    problem_results[testcase]={
+                    problem_results[testcase.name]={
                         'status': ret,
                         'time': exectime
                     }
                 result_data['result'].append({
-                    'name': testcase,
+                    'name': testcase.name,
                     'status': ret,
                     'time': exectime,
                 })
+                result_data['result'].sort(key=lambda x: x['name'])
 
             for tcset in tcsets: # calculate point
                 AllAC=True
