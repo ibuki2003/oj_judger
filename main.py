@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-#
-# Can Use Special judge.
-# Indev.
-#
-# Made by ibuki2003.
 import pymysql.cursors
 from time import sleep,time
 
