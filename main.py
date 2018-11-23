@@ -58,7 +58,7 @@ class submission:
             return True
         p = subprocess.run(self.compilecmd, stderr=subprocess.PIPE)
         if(p.returncode!=0): # Compilation failed
-            logfile=open('judge_log.txt','wb')
+            logfile=open(str(self.submission_path/'judge_log.txt'),'wb')
             logfile.write(p.stderr)
             logfile.close()
             return False
