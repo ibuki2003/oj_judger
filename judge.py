@@ -101,6 +101,13 @@ class submission:
             return ("AC",exectime)
 
     def judge(self, timelimit, outputlimit):
+        # delete before files
+        for file in [
+                self.submission_path/'judge_log.txt',
+                self.submission_path/'judge_log.json']:
+            if file.exists():
+                file.unlink()
+        
         if self.compile()==False:
             return ('CE',0,self.id)
 
