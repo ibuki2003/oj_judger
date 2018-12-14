@@ -8,7 +8,6 @@ import json
 
 def judge(subid,judging_list):
     print('Start #', subid, flush=True)
-    judging_list.append(subid)
     cfg=configparser.ConfigParser()
     cfg.read('./config.ini', 'UTF-8')
 

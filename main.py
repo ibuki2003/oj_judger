@@ -35,6 +35,7 @@ def main():
                 i=row['id']
                 if i not in judging:
                     print('start:',i)
+                    judging.append(i)
                     pool.apply_async(judge.judge, args=(i,judging))
             sleep(1)
 
