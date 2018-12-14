@@ -39,7 +39,7 @@ def judge(subid,judging_list):
 
         s=submission(row, langinfo, datadir)
         result=s.judge(tl,ol)
-        cursor.execute('update submissions set status=%s,point=%s where id=%s', result)
+        cursor.execute('update submissions set status=%s,point=%s,exec_time=%s where id=%s', result)
     judging_list.remove(subid)
     print('Done  #', subid, ':', result[0], flush=True)
     if len(judging_list)==0:
@@ -109,7 +109,7 @@ class submission:
                 file.unlink()
         
         if self.compile()==False:
-            return ('CE',0,self.id)
+            return ('CE',0,None,self.id)
 
         try: # Judge Start!
             point=0
@@ -147,8 +147,10 @@ class submission:
             }
             problem_results={}
 
+            exectime_max = 0
             for testcase in testcaselist: # judge All
                 ret, exectime=self.judge_one(testcase, timelimit, outputlimit)
+                exectime_max = max(exectime_max, exectime)
                 if ret in ['RE','OLE','TLE']:
                     stats[ret]=True
                     problem_results[testcase.name]={
@@ -196,20 +198,20 @@ class submission:
 
         except:
             print(traceback.format_exc())
-            return ('IE',point,self.id)
+            return ('IE',point,None,self.id)
         else:
             with open(str(self.submission_path/'judge_log.json'),'w') as logfile:
                 logfile.write(json.dumps(result_data))
             if stats['RE']:
-                return ('RE',point,self.id)
+                return ('RE',point,None,self.id)
             elif stats['OLE']:
-                return ('OLE',point,self.id)
+                return ('OLE',point,None,self.id)
             elif stats['TLE']:
-                return ('TLE',point,self.id)
+                return ('TLE',point,None,self.id)
             elif stats['WA']:
-                return ('WA',point,self.id)
+                return ('WA',point,exectime_max,self.id)
             else:
-                return ('AC',point,self.id)
+                return ('AC',point,exectime_max,self.id)
 
 
 if __name__ == "__main__":
