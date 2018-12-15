@@ -40,10 +40,11 @@ def judge(subid,judging_list):
         s=submission(row, langinfo, datadir)
         result=s.judge(tl,ol)
         cursor.execute('update submissions set status=%s,point=%s,exec_time=%s where id=%s', result)
-    judging_list.remove(subid)
     print('Done  #', subid, ':', result[0], flush=True)
-    if len(judging_list)==0:
-        print('Queue Empty.')
+    if judging_list is not None:
+        judging_list.remove(subid)
+        if len(judging_list)==0:
+            print('Queue Empty.')
     return
 
 

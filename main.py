@@ -41,7 +41,7 @@ def main():
                         judging.append(i)
                         pool.apply_async(judge.judge, args=(i,judging))
                 else:
-                    judge.judge(i,[])
+                    judge.judge(i,None)
             sleep(1)
 
 def terminate(signal, frame):
