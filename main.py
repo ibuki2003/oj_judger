@@ -7,8 +7,8 @@ from multiprocessing import Pool, Array, Manager
 import configparser
 import judge
 
-def init():
-    global cfg,connection,cursor,pool
+def main():
+    global connection,cursor,pool
     signal.signal(signal.SIGINT, terminate)
     cfg=configparser.ConfigParser()
     cfg.read('./config.ini', 'UTF-8')
@@ -24,8 +24,6 @@ def init():
     cursor=connection.cursor()
     pool = Pool(processes=cfg.getint('limit', 'thread'))
 
-def main():
-    global pool,cursor
     with Manager() as manager:
         judging=manager.list()
         while True: # Main loop
@@ -39,7 +37,7 @@ def main():
             sleep(1)
 
 def terminate(signal, frame):
-    global connection,cursor
+    global connection,cursor,pool
     print('stopping')
     pool.close()
     pool.join()
@@ -49,5 +47,4 @@ def terminate(signal, frame):
     sys.exit(0)
 
 if __name__ == "__main__":
-    init()
     main()
