@@ -150,7 +150,8 @@ class submission:
             exectime_max = 0
             for testcase in testcaselist: # judge All
                 ret, exectime=self.judge_one(testcase, timelimit, outputlimit)
-                exectime_max = max(exectime_max, exectime)
+                if exectime is not None :
+                    exectime_max = max(exectime_max, exectime)
                 if ret in ['RE','OLE','TLE']:
                     stats[ret]=True
                     problem_results[testcase.name]={
