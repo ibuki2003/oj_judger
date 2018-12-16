@@ -31,7 +31,7 @@ def judge(subid,judging_list):
         row=cursor.fetchone()
 
         # get Lang Data
-        cursor.execute('SELECT * FROM `langs` WHERE id=%s',(row['lang'],))
+        cursor.execute('SELECT * FROM `langs` WHERE id=%s',(row['lang_id'],))
         langinfo=cursor.fetchone()
 
         datadir = Path(cfg.get('oj', 'datadir'))
@@ -50,7 +50,7 @@ def judge(subid,judging_list):
 class submission:
     def __init__(self, datas, langinfo, datadir):
         self.id=datas['id']
-        self.problem=datas['problem']
+        self.problem=datas['problem_id']
         self.time=datas['time']
 
         self.submission_path = datadir/'submissions'/str(self.id)
