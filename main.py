@@ -22,18 +22,26 @@ def main():
         cursorclass=pymysql.cursors.DictCursor)
     connection.autocommit(True)
     cursor=connection.cursor()
-    pool = Pool(processes=cfg.getint('limit', 'thread'))
+    
+    multi_enabled=(cfg.getint('limit', 'thread')!=-1)
+
+    if multi_enabled:
+        pool = Pool(processes=cfg.getint('limit', 'thread'))
 
     with Manager() as manager:
-        judging=manager.list()
+        if multi_enabled:
+            judging=manager.list()
         while True: # Main loop
             sql = 'select id from `submissions` WHERE status in ("WJ","WR")'
             cursor.execute(sql)
             for row in cursor.fetchall():
                 i=row['id']
-                if i not in judging:
-                    judging.append(i)
-                    pool.apply_async(judge.judge, args=(i,judging))
+                if multi_enabled:
+                    if i not in judging:
+                        judging.append(i)
+                        pool.apply_async(judge.judge, args=(i,judging))
+                else:
+                    judge.judge(i,None)
             sleep(1)
 
 def terminate(signal, frame):
