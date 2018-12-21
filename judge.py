@@ -81,6 +81,8 @@ class submission:
                 p = subprocess.Popen(self.execcmd, stdin=input_file, stdout=subprocess.PIPE)
                 out = p.communicate(timeout=timelimit)[0]
                 exectime=int((time()-starttime)*1000)
+                if p.returncode!=0:
+                    return ("RE", None)
             except subprocess.TimeoutExpired:
                 p.kill()
                 return ("TLE",None)
