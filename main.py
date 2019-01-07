@@ -3,12 +3,12 @@ import pymysql.cursors
 from time import sleep,time
 import sys
 import signal
-from multiprocessing import Pool, Array, Manager
+import multiprocessing
 import configparser
 import judge
 
 def main():
-    global connection,cursor,pool
+    global connection,cursor,jobs
     signal.signal(signal.SIGINT, terminate)
     cfg=configparser.ConfigParser()
     cfg.read('./config.ini', 'UTF-8')
@@ -23,33 +23,37 @@ def main():
     connection.autocommit(True)
     cursor=connection.cursor()
     
-    multi_enabled=(cfg.getint('limit', 'thread')!=-1)
+    job_limit=cfg.getint('limit', 'thread')
+    multi_enabled=(job_limit!=-1)
 
     if multi_enabled:
-        pool = Pool(processes=cfg.getint('limit', 'thread'))
+        jobs = {}
+    
 
-    with Manager() as manager:
-        if multi_enabled:
-            judging=manager.list()
-        while True: # Main loop
-            sql = 'select id from `submissions` WHERE status in ("WJ","WR")'
-            cursor.execute(sql)
-            for row in cursor.fetchall():
-                i=row['id']
-                if multi_enabled:
-                    if i not in judging:
-                        judging.append(i)
-                        pool.apply_async(judge.judge, args=(i,judging))
-                else:
-                    judge.judge(i,None)
-            sleep(1)
+    while True: # Main loop
+        sql = 'select id from `submissions` WHERE status in ("WJ","WR")'
+        cursor.execute(sql)
+        for row in cursor.fetchall():
+            i=row['id']
+            if multi_enabled:
+                if i not in jobs and len(jobs)<job_limit:
+                    jobs[i]=multiprocessing.Process(target=judge.judge, args=(i,))
+                    jobs[i].start()
+            else:
+                judge.judge(i)
+
+        for i in jobs.copy():
+            if not jobs[i].is_alive():
+                del jobs[i]
+
+        sleep(1)
 
 def terminate(signal, frame):
-    global connection,cursor,pool
+    global connection,cursor,jobs
     print('stopping')
-    pool.close()
-    pool.join()
-
+    for job in jobs:
+        jobs[job].join()
+    
     cursor.close()
     connection.close()
     sys.exit(0)

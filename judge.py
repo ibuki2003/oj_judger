@@ -5,8 +5,11 @@ import subprocess
 import traceback
 from time import time
 import json
+import signal
 
-def judge(subid,judging_list):
+def judge(subid):
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     print('Start #', subid, flush=True)
     cfg=configparser.ConfigParser()
     cfg.read('./config.ini', 'UTF-8')
@@ -41,10 +44,6 @@ def judge(subid,judging_list):
         result=s.judge(tl,ol)
         cursor.execute('update submissions set status=%s,point=%s,exec_time=%s where id=%s', result)
     print('Done  #', subid, ':', result[0], flush=True)
-    if judging_list is not None:
-        judging_list.remove(subid)
-        if len(judging_list)==0:
-            print('Queue Empty.')
     return
 
 
@@ -217,7 +216,3 @@ class submission:
             else:
                 return ('AC',point,exectime_max,self.id)
 
-
-if __name__ == "__main__":
-    alist=[]
-    judge(1,alist)
