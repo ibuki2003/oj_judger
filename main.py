@@ -36,7 +36,7 @@ def main():
         for row in cursor.fetchall():
             i=row['id']
             if multi_enabled:
-                if i not in jobs and len(jobs)<job_limit:
+                if i not in jobs and (job_limit==0 or len(jobs)<job_limit):
                     jobs[i]=multiprocessing.Process(target=judge.judge, args=(i,))
                     jobs[i].start()
             else:
