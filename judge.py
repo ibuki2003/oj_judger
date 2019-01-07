@@ -27,6 +27,16 @@ def judge(subid):
         cursorclass=pymysql.cursors.DictCursor)
     connection.autocommit(True)
     cursor=connection.cursor()
+
+    if cfg.getboolean('sandbox', 'enabled'):
+        import sandbox
+        sb=sandbox.SandBox(
+            cfg.get('sandbox', 'base_dir'),
+            cfg.get('sandbox', 'user'),
+            cfg.get('sandbox', 'addition_path').split(' '))
+        sb.mount()
+    else:
+        sb=None
     with connection, cursor:
 
         # get Submission Data
@@ -40,15 +50,17 @@ def judge(subid):
         datadir = Path(cfg.get('oj', 'datadir'))
 
 
-        s=submission(row, langinfo, datadir)
+        s=submission(sb, row, langinfo, datadir)
         result=s.judge(tl,ol)
         cursor.execute('update submissions set status=%s,point=%s,exec_time=%s where id=%s', result)
+    if sb is not None:
+        sb.umount()
     print('Done  #', subid, ':', result[0], flush=True)
     return
 
 
 class submission:
-    def __init__(self, datas, langinfo, datadir):
+    def __init__(self, sandbox, datas, langinfo, datadir):
         self.id=datas['id']
         self.problem=datas['problem_id']
         self.time=datas['time']
@@ -56,16 +68,28 @@ class submission:
         self.submission_path = datadir/'submissions'/str(self.id)
         self.problem_path = datadir/'problems'/str(self.problem)
 
-        self.execcmd=langinfo['exec'].replace('{path}',str(self.submission_path)).split()
+
+        if sandbox is not None:
+            self.sandbox=sandbox
+            with open(str(self.submission_path/('source.'+langinfo['extension'])),'rb') as source_file:
+                sandbox.put_file('/source.'+langinfo['extension'], source_file.read())
+            path = './'
+        else:
+            self.sandbox=subprocess
+            path = str(self.submission_path)
+        
+
+        self.execcmd=langinfo['exec'].replace('{path}',path).split()
 
         self.compile_required=langinfo['compile'] is not None
         if(self.compile_required):
-            self.compilecmd=langinfo['compile'].replace('{path}',str(self.submission_path)).split()
+            self.compilecmd=langinfo['compile'].replace('{path}',path).split()
     
     def compile(self):
         if not self.compile_required: # no compile
             return True
-        p = subprocess.run(self.compilecmd, stderr=subprocess.PIPE)
+        p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE)
+        p.wait()
         if(p.returncode!=0): # Compilation failed
             logfile=open(str(self.submission_path/'judge_log.txt'),'wb')
             logfile.write(p.stderr)
@@ -77,7 +101,7 @@ class submission:
         with open(str(testcase), 'r') as input_file:
             try:
                 starttime=time()
-                p = subprocess.Popen(self.execcmd, stdin=input_file, stdout=subprocess.PIPE)
+                p = self.sandbox.Popen(['timeout', str(timelimit+1)]+self.execcmd, stdin=input_file, stdout=subprocess.PIPE)
                 out = p.communicate(timeout=timelimit)[0]
                 exectime=int((time()-starttime)*1000)
                 if p.returncode!=0:
@@ -109,7 +133,6 @@ class submission:
                 self.submission_path/'judge_log.json']:
             if file.exists():
                 file.unlink()
-        
         if self.compile()==False:
             return ('CE',0,None,self.id)
 
