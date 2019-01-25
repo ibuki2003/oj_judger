@@ -41,10 +41,11 @@ def main():
                     jobs[i].start()
             else:
                 judge.judge(i)
-
-        for i in jobs.copy():
-            if not jobs[i].is_alive():
-                del jobs[i]
+        
+        if multi_enabled:
+            for i in jobs.copy():
+                if not jobs[i].is_alive():
+                    del jobs[i]
 
         sleep(1)
 
