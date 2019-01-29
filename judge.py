@@ -92,7 +92,7 @@ class submission:
         p.wait()
         if(p.returncode!=0): # Compilation failed
             logfile=open(str(self.submission_path/'judge_log.txt'),'wb')
-            logfile.write(p.stderr)
+            logfile.write(p.stderr.read())
             logfile.close()
             return False
         return True
