@@ -1,3 +1,4 @@
+import sys
 import pymysql.cursors
 import configparser
 from pathlib import Path
@@ -7,7 +8,12 @@ from time import time
 import json
 import signal
 
+def pre_exec():
+    # To ignore CTRL+C signal in the new process
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
 def judge(subid):
+    global TIMEOUT_COMMAND
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     print('Start #', subid, flush=True)
@@ -16,7 +22,6 @@ def judge(subid):
 
     tl = cfg.getint('limit', 'time')
     ol =  cfg.getint('limit', 'output')
-    
     
     connection = pymysql.connect(
         host    =cfg.get('database', 'host'),
@@ -35,6 +40,7 @@ def judge(subid):
             cfg.get('sandbox', 'user'),
             cfg.get('sandbox', 'addition_path').split(' '))
         sb.mount()
+        TIMEOUT_COMMAND = cfg.get('sandbox', 'timeout_command')
     else:
         sb=None
     with connection, cursor:
@@ -69,6 +75,7 @@ class submission:
         self.problem_path = datadir/'problems'/str(self.problem)
 
 
+        self.sandbox_enabled = (sandbox is not None)
         if sandbox is not None:
             self.sandbox=sandbox
             with open(str(self.submission_path/('source.'+langinfo['extension'])),'rb') as source_file:
@@ -88,7 +95,14 @@ class submission:
     def compile(self):
         if not self.compile_required: # no compile
             return True
-        p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE)
+        
+        # disable Ctrl-C for subprocess
+        if sys.platform.startswith('win'):
+            # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
+            p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE, creationflags=0x00000200)
+        else:
+            p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE, preexec_fn = pre_exec)
+        
         p.wait()
         if(p.returncode!=0): # Compilation failed
             logfile=open(str(self.submission_path/'judge_log.txt'),'wb')
@@ -101,7 +115,18 @@ class submission:
         with open(str(testcase), 'r') as input_file:
             try:
                 starttime=time()
-                p = self.sandbox.Popen(['timeout', str(timelimit+1)]+self.execcmd, stdin=input_file, stdout=subprocess.PIPE)
+                additional_command = []
+                if self.sandbox_enabled :
+                    additional_command = [TIMEOUT_COMMAND, str(timelimit+1)]
+                
+                # disable Ctrl-C for subprocess
+                if sys.platform.startswith('win'):
+                    # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
+                    p = self.sandbox.Popen(additional_command+self.execcmd, stdin=input_file, stdout=subprocess.PIPE,
+                        creationflags=0x00000200)
+                else:
+                    p = self.sandbox.Popen(additional_command+self.execcmd, stdin=input_file, stdout=subprocess.PIPE,
+                        preexec_fn = pre_exec)
                 out = p.communicate(timeout=timelimit)[0]
                 exectime=int((time()-starttime)*1000)
                 if p.returncode!=0:
