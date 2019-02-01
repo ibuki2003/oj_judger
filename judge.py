@@ -103,10 +103,10 @@ class submission:
         else:
             p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE, preexec_fn = pre_exec)
         
-        p.wait()
+        compile_err = p.communicate()[1]
         if(p.returncode!=0): # Compilation failed
             logfile=open(str(self.submission_path/'judge_log.txt'),'wb')
-            logfile.write(p.stderr.read())
+            logfile.write(compile_err)
             logfile.close()
             return False
         return True
