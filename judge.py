@@ -8,10 +8,6 @@ from time import time
 import json
 import signal
 
-def pre_exec():
-    # To ignore CTRL+C signal in the new process
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-
 def judge(subid):
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -102,7 +98,7 @@ class submission:
             # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
             p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE, creationflags=0x00000200)
         else:
-            p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE, preexec_fn = pre_exec)
+            p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE, start_new_session=True)
         
         compile_err = p.communicate()[1]
         if(p.returncode!=0): # Compilation failed
@@ -128,7 +124,7 @@ class submission:
                         creationflags=0x00000200)
                 else:
                     p = self.sandbox.Popen(additional_command+self.execcmd, stdin=input_file, stdout=subprocess.PIPE,
-                        preexec_fn = pre_exec)
+                        start_new_session=True)
                 out = p.communicate(timeout=timelimit)[0]
                 exectime=int((time()-starttime)*1000)
                 if p.returncode!=0:
