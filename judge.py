@@ -13,7 +13,6 @@ def pre_exec():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 def judge(subid):
-    global TIMEOUT_COMMAND
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     print('Start #', subid, flush=True)
@@ -40,9 +39,11 @@ def judge(subid):
             cfg.get('sandbox', 'user'),
             cfg.get('sandbox', 'addition_path').split(' '))
         sb.mount()
-        TIMEOUT_COMMAND = cfg.get('sandbox', 'timeout_command')
+        timeout_command = cfg.get('sandbox', 'timeout_command').split(' ')
     else:
         sb=None
+        timeout_command = None
+
     with connection, cursor:
 
         # get Submission Data
@@ -56,7 +57,7 @@ def judge(subid):
         datadir = Path(cfg.get('oj', 'datadir'))
 
 
-        s=submission(sb, row, langinfo, datadir)
+        s=submission(sb, row, langinfo, datadir, timeout_command)
         result=s.judge(tl,ol)
         cursor.execute('update submissions set status=%s,point=%s,exec_time=%s where id=%s', result)
     if sb is not None:
@@ -66,14 +67,14 @@ def judge(subid):
 
 
 class submission:
-    def __init__(self, sandbox, datas, langinfo, datadir):
+    def __init__(self, sandbox, datas, langinfo, datadir, timeout_command):
         self.id=datas['id']
         self.problem=datas['problem_id']
         self.time=datas['time']
 
         self.submission_path = datadir/'submissions'/str(self.id)
         self.problem_path = datadir/'problems'/str(self.problem)
-
+        self.timeout_command = timeout_command
 
         self.sandbox_enabled = (sandbox is not None)
         if sandbox is not None:
@@ -117,7 +118,8 @@ class submission:
                 starttime=time()
                 additional_command = []
                 if self.sandbox_enabled :
-                    additional_command = [TIMEOUT_COMMAND, str(timelimit+1)]
+                    additional_command += self.timeout_command
+                    additional_command += str(timelimit+1);
                 
                 # disable Ctrl-C for subprocess
                 if sys.platform.startswith('win'):

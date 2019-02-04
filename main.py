@@ -46,11 +46,8 @@ def main():
             for i in jobs.copy():
                 if not jobs[i].is_alive():
                     del jobs[i]
-            if len(jobs) == 0:
-                # all jobs finishied, bring back Ctrl-C handler
-                signal.signal(signal.SIGTERM, signal.SIG_DFL)
-                signal.signal(signal.SIGINT, terminate)
         else:
+            # signal should be ignored only in judge.judge()
             signal.signal(signal.SIGTERM, signal.SIG_DFL)
             signal.signal(signal.SIGINT, terminate)
 
