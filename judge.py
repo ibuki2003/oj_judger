@@ -128,7 +128,7 @@ class submission:
                 additional_command = []
                 if self.sandbox_enabled :
                     additional_command += self.timeout_command
-                    additional_command += str(timelimit+1);
+                    additional_command.append(str(timelimit+1));
                 
                 # disable Ctrl-C for subprocess
                 if sys.platform.startswith('win'):
