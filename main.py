@@ -8,7 +8,7 @@ import configparser
 import judge
 
 def main():
-    global connection,cursor,jobs
+    global connection,cursor,jobs,multi_enabled
     signal.signal(signal.SIGINT, terminate)
     cfg=configparser.ConfigParser()
     cfg.read('./config.ini', 'UTF-8')
@@ -46,14 +46,19 @@ def main():
             for i in jobs.copy():
                 if not jobs[i].is_alive():
                     del jobs[i]
+        else:
+            # signal should be ignored only in judge.judge()
+            signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            signal.signal(signal.SIGINT, terminate)
 
         sleep(1)
 
 def terminate(signal, frame):
     global connection,cursor,jobs
     print('stopping')
-    for job in jobs:
-        jobs[job].join()
+    if multi_enabled:
+        for job in jobs:
+            jobs[job].join()
     
     cursor.close()
     connection.close()

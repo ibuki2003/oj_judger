@@ -1,3 +1,4 @@
+import sys
 import pymysql.cursors
 import configparser
 from pathlib import Path
@@ -15,8 +16,9 @@ def judge(subid):
     cfg.read('./config.ini', 'UTF-8')
 
     tl = cfg.getint('limit', 'time')
-    ol =  cfg.getint('limit', 'output')
-    
+    ol = cfg.getint('limit', 'output')
+    compile_tl = cfg.getint('limit', 'compile_time')
+    compile_ol = cfg.getint('limit', 'compile_output')
     
     connection = pymysql.connect(
         host    =cfg.get('database', 'host'),
@@ -35,8 +37,11 @@ def judge(subid):
             cfg.get('sandbox', 'user'),
             cfg.get('sandbox', 'addition_path').split(' '))
         sb.mount()
+        timeout_command = cfg.get('sandbox', 'timeout_command').split(' ')
     else:
         sb=None
+        timeout_command = None
+
     with connection, cursor:
 
         # get Submission Data
@@ -50,8 +55,8 @@ def judge(subid):
         datadir = Path(cfg.get('oj', 'datadir'))
 
 
-        s=submission(sb, row, langinfo, datadir)
-        result=s.judge(tl,ol)
+        s=submission(sb, row, langinfo, datadir, timeout_command)
+        result=s.judge(tl,ol,compile_tl,compile_ol)
         cursor.execute('update submissions set status=%s,point=%s,exec_time=%s where id=%s', result)
     if sb is not None:
         sb.umount()
@@ -60,15 +65,16 @@ def judge(subid):
 
 
 class submission:
-    def __init__(self, sandbox, datas, langinfo, datadir):
+    def __init__(self, sandbox, datas, langinfo, datadir, timeout_command):
         self.id=datas['id']
         self.problem=datas['problem_id']
         self.time=datas['time']
 
         self.submission_path = datadir/'submissions'/str(self.id)
         self.problem_path = datadir/'problems'/str(self.problem)
+        self.timeout_command = timeout_command
 
-
+        self.sandbox_enabled = (sandbox is not None)
         if sandbox is not None:
             self.sandbox=sandbox
             with open(str(self.submission_path/('source.'+langinfo['extension'])),'rb') as source_file:
@@ -85,23 +91,53 @@ class submission:
         if(self.compile_required):
             self.compilecmd=langinfo['compile'].replace('{path}',path).split()
     
-    def compile(self):
+    def compile(self, timelimit, outputlimit):
         if not self.compile_required: # no compile
             return True
-        p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE)
-        p.wait()
-        if(p.returncode!=0): # Compilation failed
-            logfile=open(str(self.submission_path/'judge_log.txt'),'wb')
-            logfile.write(p.stderr.read())
+        
+        logfile=open(str(self.submission_path/'judge_log.txt'),'wb')
+        
+        try:
+            # disable Ctrl-C for subprocess
+            if sys.platform.startswith('win'):
+                # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
+                p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE, creationflags=0x00000200)
+            else:
+                p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE, start_new_session=True)
+            
+            compile_err = p.communicate(timeout=timelimit)[1]
+        except subprocess.TimeoutExpired:
+            logfile.write(b"Compile time limit exceeded")
             logfile.close()
             return False
-        return True
+        
+        if len(compile_err) > outputlimit*1024:
+            logfile.write(b"Compile output limit exceeded")
+            logfile.close()
+            return False
+        
+        logfile.write(compile_err)
+        logfile.close()
+            
+        return (p.returncode == 0)
     
     def judge_one(self, testcase, timelimit, outputlimit):
         with open(str(testcase), 'r') as input_file:
             try:
                 starttime=time()
-                p = self.sandbox.Popen(['timeout', str(timelimit+1)]+self.execcmd, stdin=input_file, stdout=subprocess.PIPE)
+                additional_command = []
+                if self.sandbox_enabled :
+                    additional_command += self.timeout_command
+                    additional_command.append(str(timelimit+1));
+                
+                # disable Ctrl-C for subprocess
+                if sys.platform.startswith('win'):
+                    # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
+                    p = self.sandbox.Popen(additional_command+self.execcmd, stdin=input_file, stdout=subprocess.PIPE,
+                        creationflags=0x00000200)
+                else:
+                    p = self.sandbox.Popen(additional_command+self.execcmd, stdin=input_file, stdout=subprocess.PIPE,
+                        start_new_session=True)
                 out = p.communicate(timeout=timelimit)[0]
                 exectime=int((time()-starttime)*1000)
                 if p.returncode!=0:
@@ -109,8 +145,6 @@ class submission:
             except subprocess.TimeoutExpired:
                 p.kill()
                 return ("TLE",None)
-            except subprocess.CalledProcessError:
-                return ("RE",None)
             
             if len(out)>outputlimit*1048576:
                 return ("OLE",None)
@@ -126,14 +160,14 @@ class submission:
                         return ("WA",exectime)
             return ("AC",exectime)
 
-    def judge(self, timelimit, outputlimit):
+    def judge(self, timelimit, outputlimit, compile_timelimit, compile_outputlimit):
         # delete before files
         for file in [
                 self.submission_path/'judge_log.txt',
                 self.submission_path/'judge_log.json']:
             if file.exists():
                 file.unlink()
-        if self.compile()==False:
+        if self.compile(compile_timelimit, compile_outputlimit)==False:
             return ('CE',0,None,self.id)
 
         try: # Judge Start!
