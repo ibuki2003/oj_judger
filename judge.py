@@ -107,6 +107,11 @@ class submission:
             
             compile_err = p.communicate(timeout=timelimit)[1]
         except subprocess.TimeoutExpired:
+            if sys.platform.startswith('win'):
+                # p.kill() doesn't seem to kill child processes of it on Windows
+                subprocess.run(['TASKKILL', '/F', '/T', '/PID', str(p.pid)], stdout=subprocess.DEVNULL)
+            else:
+                p.kill()
             logfile.write(b"Compile time limit exceeded")
             logfile.close()
             return False
@@ -143,7 +148,11 @@ class submission:
                 if p.returncode!=0:
                     return ("RE", None)
             except subprocess.TimeoutExpired:
-                p.kill()
+                if sys.platform.startswith('win'):
+                    # p.kill() doesn't seem to kill child processes of it on Windows
+                    subprocess.run(['TASKKILL', '/F', '/T', '/PID', str(p.pid)], stdout=subprocess.DEVNULL)
+                else:
+                    p.kill()
                 return ("TLE",None)
             
             if len(out)>outputlimit*1048576:
