@@ -32,10 +32,12 @@ def judge(subid):
 
     if cfg.getboolean('sandbox', 'enabled'):
         import sandbox
+        addition_paths = cfg.get('sandbox', 'addition_path').split(' ')
+        addition_paths.remove('')
         sb=sandbox.SandBox(
             cfg.get('sandbox', 'base_dir'),
             cfg.get('sandbox', 'user'),
-            cfg.get('sandbox', 'addition_path').split(' '))
+            addition_paths)
         sb.mount()
         timeout_command = cfg.get('sandbox', 'timeout_command').split(' ')
     else:
