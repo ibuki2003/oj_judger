@@ -1,4 +1,5 @@
 import sys
+import os
 import pymysql.cursors
 import configparser
 from pathlib import Path
@@ -8,6 +9,28 @@ from time import time
 import json
 import signal
 
+def compile_multiple_judger(cmd, sandbox, timelimit, outputlimit):
+    try:
+        # disable Ctrl-C for subprocess
+        if sys.platform.startswith('win'):
+            # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
+            p = sandbox.Popen(cmd, stderr=subprocess.PIPE, creationflags=0x00000200)
+        else:
+            p = sandbox.Popen(cmd, stderr=subprocess.PIPE, start_new_session=True)
+        
+        compile_err = p.communicate(timeout=timelimit)[1]
+    except subprocess.TimeoutExpired:
+        p.kill()
+        return False
+    
+    if p.returncode != 0:
+        return False
+    
+    if len(compile_err) > outputlimit*1024:
+        return False
+        
+    return True
+    
 def judge(subid):
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -45,7 +68,6 @@ def judge(subid):
         timeout_command = None
 
     with connection, cursor:
-
         # get Submission Data
         cursor.execute('SELECT * FROM `submissions` WHERE id=%s',(subid,))
         row=cursor.fetchone()
@@ -55,10 +77,9 @@ def judge(subid):
         langinfo=cursor.fetchone()
 
         datadir = Path(cfg.get('oj', 'datadir'))
-
-
+        
         s=submission(sb, row, langinfo, datadir, timeout_command)
-        result=s.judge(tl,ol,compile_tl,compile_ol)
+        result=s.judge(tl,ol,compile_tl,compile_ol, cfg['multiple_judge'])
         cursor.execute('update submissions set status=%s,point=%s,exec_time=%s where id=%s', result)
     if sb is not None:
         sb.umount()
@@ -159,7 +180,30 @@ class submission:
             
             if len(out)>outputlimit*1048576:
                 return ("OLE",None)
-            else: # Execute OK
+            
+            if self.multiple_judge_exec is not None:
+                testcase_out_path = str(testcase.parents[1]/'out'/testcase.name)
+                # run judger without sandbox as it reads in/out
+                # disable Ctrl-C
+                if sys.platform.startswith('win'):
+                    p = subprocess.Popen([self.multiple_judge_exec, str(testcase), testcase_out_path],
+                        stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+                        creationflags=0x00000200)
+                else:
+                    p = subprocess.Popen([self.multiple_judge_exec, str(testcase), testcase_out_path],
+                        stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+                        start_new_session=True)
+                try:
+                    judge_result = p.communicate(timeout=timelimit, input=out)[1]
+                    if p.returncode != 0:
+                        return ("IE", None) # judger error
+                except subprocess.TimeoutExpired:
+                    p.kill()
+                    return ("IE", None) # judger error
+                
+                if not judge_result.startswith(b"AC"):
+                    return ("WA", exectime)
+            else:
                 with open(str(testcase.parents[1]/'out'/testcase.name), 'r') as ansfile:
                     anslist=ansfile.read().split()
                 outlist=out.decode('utf-8').split()
@@ -171,7 +215,7 @@ class submission:
                         return ("WA",exectime)
             return ("AC",exectime)
 
-    def judge(self, timelimit, outputlimit, compile_timelimit, compile_outputlimit):
+    def judge(self, timelimit, outputlimit, compile_timelimit, compile_outputlimit, multiple_judge_cfg):
         # delete before files
         for file in [
                 self.submission_path/'judge_log.txt',
@@ -180,6 +224,18 @@ class submission:
                 file.unlink()
         if self.compile(compile_timelimit, compile_outputlimit)==False:
             return ('CE',0,None,self.id)
+            
+        
+        if os.path.isfile(multiple_judge_cfg['source_path'].replace('{path}', str(self.problem_path))):
+            # multiple judge
+            if not os.path.isfile(multiple_judge_cfg['exec_path'].replace('{path}', str(self.problem_path))):
+                # only if the judger is not compiled yet
+                if not compile_multiple_judger(multiple_judge_cfg['compile_cmd'].replace('{path}', str(self.problem_path)),
+                                               self.sandbox, compile_timelimit, compile_outputlimit):
+                    return ('IE',0,None,self.id)
+            self.multiple_judge_exec = multiple_judge_cfg['exec_path'].replace('{path}', str(self.problem_path))
+        else:
+            self.multiple_judge_exec = None
 
         try: # Judge Start!
             point=0
@@ -233,6 +289,8 @@ class submission:
                         'status': ret,
                         'time': exectime
                     }
+                elif ret=='IE':
+                    return ('IE',0,None,self.id)
                 else:
                     problem_results[testcase.name]={
                         'status': ret,
