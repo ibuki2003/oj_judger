@@ -9,6 +9,14 @@ from time import time
 import json
 import signal
 
+
+def kill_child_processes(process):
+    if sys.platform.startswith('win'):
+        # p.kill() doesn't seem to kill the child processes on Windows
+        subprocess.run(['TASKKILL', '/F', '/T', '/PID', str(process.pid)], stdout=subprocess.DEVNULL)
+    else:
+        process.kill()
+
 def compile_multiple_judger(cmd, sandbox, timelimit, outputlimit):
     try:
         # disable Ctrl-C for subprocess
@@ -20,7 +28,7 @@ def compile_multiple_judger(cmd, sandbox, timelimit, outputlimit):
         
         compile_err = p.communicate(timeout=timelimit)[1]
     except subprocess.TimeoutExpired:
-        p.kill()
+        kill_child_processes(p)
         return False
     
     if p.returncode != 0:
@@ -130,11 +138,7 @@ class submission:
             
             compile_err = p.communicate(timeout=timelimit)[1]
         except subprocess.TimeoutExpired:
-            if sys.platform.startswith('win'):
-                # p.kill() doesn't seem to kill child processes of it on Windows
-                subprocess.run(['TASKKILL', '/F', '/T', '/PID', str(p.pid)], stdout=subprocess.DEVNULL)
-            else:
-                p.kill()
+            kill_child_processes(p)
             logfile.write(b"Compile time limit exceeded")
             logfile.close()
             return False
@@ -148,15 +152,66 @@ class submission:
         logfile.close()
             
         return (p.returncode == 0)
+
+    def judge_one_with_custom_judger(self, testcase, timelimit, outputlimit, judger_exec):
+        try:
+            # start the judger first
+            testcase_out_path = str(testcase.parents[1]/'out'/testcase.name)
+            # disable Ctrl-C for subprocess
+            if sys.platform.startswith('win'):
+                # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
+                judger = self.sandbox.Popen([judger_exec, str(testcase), testcase_out_path],
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=0x00000200)
+            else:
+                judger = self.sandbox.Popen([judger_exec, str(testcase), testcase_out_path],
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+            
+            # run submitted one
+            additional_command = []
+            if self.sandbox_enabled :
+                additional_command += self.timeout_command
+                additional_command.append(str(timelimit+1))
+            # disable Ctrl-C for subprocess
+            if sys.platform.startswith('win'):
+                # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
+                submitted = self.sandbox.Popen(additional_command+self.execcmd, stdin=judger.stdout, stdout=judger.stdin,
+                    creationflags=0x00000200)
+            else:
+                submitted = self.sandbox.Popen(additional_command+self.execcmd, stdin=judger.stdout, stdout=judger.stdin,
+                    start_new_session=True)
+            
+            starttime=time()
+            submitted.communicate(timeout=timelimit)
+            exectime=int((time()-starttime)*1000)
+            if submitted.returncode!=0:
+                return ("RE",None)
+        except subprocess.TimeoutExpired:
+            kill_child_processes(submitted)
+            kill_child_processes(judger)
+            return ("TLE",None)
+        
+        # send EOF to the judger
+        judger.stdin.close()
+        
+        try: # wait for judger for (timelimit) secs
+            result = judger.communicate(timeout=timelimit)[1]
+        except subprocess.TimeoutExpired:
+            kill_child_processes(judger)
+            return ("IE",None) # judger TLE
+        
+        if judger.returncode!=0:
+            return ("IE", None)
+        if not result.startswith(b"AC"):
+            return ("WA", exectime)
+        return ("AC", exectime)
     
     def judge_one(self, testcase, timelimit, outputlimit):
         with open(str(testcase), 'r') as input_file:
             try:
-                starttime=time()
                 additional_command = []
                 if self.sandbox_enabled :
                     additional_command += self.timeout_command
-                    additional_command.append(str(timelimit+1));
+                    additional_command.append(str(timelimit+1))
                 
                 # disable Ctrl-C for subprocess
                 if sys.platform.startswith('win'):
@@ -166,53 +221,27 @@ class submission:
                 else:
                     p = self.sandbox.Popen(additional_command+self.execcmd, stdin=input_file, stdout=subprocess.PIPE,
                         start_new_session=True)
+                starttime=time()
                 out = p.communicate(timeout=timelimit)[0]
                 exectime=int((time()-starttime)*1000)
                 if p.returncode!=0:
                     return ("RE", None)
             except subprocess.TimeoutExpired:
-                if sys.platform.startswith('win'):
-                    # p.kill() doesn't seem to kill child processes of it on Windows
-                    subprocess.run(['TASKKILL', '/F', '/T', '/PID', str(p.pid)], stdout=subprocess.DEVNULL)
-                else:
-                    p.kill()
+                kill_child_processes(p)
                 return ("TLE",None)
             
             if len(out)>outputlimit*1048576:
                 return ("OLE",None)
             
-            if self.multiple_judge_exec is not None:
-                testcase_out_path = str(testcase.parents[1]/'out'/testcase.name)
-                # run judger without sandbox as it reads in/out
-                # disable Ctrl-C
-                if sys.platform.startswith('win'):
-                    p = subprocess.Popen([self.multiple_judge_exec, str(testcase), testcase_out_path],
-                        stdin=subprocess.PIPE, stderr=subprocess.PIPE,
-                        creationflags=0x00000200)
-                else:
-                    p = subprocess.Popen([self.multiple_judge_exec, str(testcase), testcase_out_path],
-                        stdin=subprocess.PIPE, stderr=subprocess.PIPE,
-                        start_new_session=True)
-                try:
-                    judge_result = p.communicate(timeout=timelimit, input=out)[1]
-                    if p.returncode != 0:
-                        return ("IE", None) # judger error
-                except subprocess.TimeoutExpired:
-                    p.kill()
-                    return ("IE", None) # judger error
-                
-                if not judge_result.startswith(b"AC"):
-                    return ("WA", exectime)
-            else:
-                with open(str(testcase.parents[1]/'out'/testcase.name), 'r') as ansfile:
-                    anslist=ansfile.read().split()
-                outlist=out.decode('utf-8').split()
-                
-                if len(outlist)!=len(anslist):
+            with open(str(testcase.parents[1]/'out'/testcase.name), 'r') as ansfile:
+                anslist=ansfile.read().split()
+            outlist=out.decode('utf-8').split()
+            
+            if len(outlist)!=len(anslist):
+                return ("WA",exectime)
+            for i in range(len(outlist)):
+                if(outlist[i]!=anslist[i]):
                     return ("WA",exectime)
-                for i in range(len(outlist)):
-                    if(outlist[i]!=anslist[i]):
-                        return ("WA",exectime)
             return ("AC",exectime)
 
     def judge(self, timelimit, outputlimit, compile_timelimit, compile_outputlimit, multiple_judge_cfg):
@@ -233,9 +262,9 @@ class submission:
                 if not compile_multiple_judger(multiple_judge_cfg['compile_cmd'].replace('{path}', str(self.problem_path)),
                                                self.sandbox, compile_timelimit, compile_outputlimit):
                     return ('IE',0,None,self.id)
-            self.multiple_judge_exec = multiple_judge_cfg['exec_path'].replace('{path}', str(self.problem_path))
+            judger_exec = multiple_judge_cfg['exec_path'].replace('{path}', str(self.problem_path))
         else:
-            self.multiple_judge_exec = None
+            judger_exec = None
 
         try: # Judge Start!
             point=0
@@ -275,7 +304,10 @@ class submission:
 
             exectime_max = 0
             for testcase in testcaselist: # judge All
-                ret, exectime=self.judge_one(testcase, timelimit, outputlimit)
+                if judger_exec is None:
+                    ret, exectime=self.judge_one(testcase, timelimit, outputlimit)
+                else:
+                    ret, exectime=self.judge_one_with_custom_judger(testcase, timelimit, outputlimit, judger_exec)
                 if exectime is not None :
                     exectime_max = max(exectime_max, exectime)
                 if ret in ['RE','OLE','TLE']:
