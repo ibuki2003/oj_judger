@@ -32,7 +32,6 @@ def compile_multiple_judger(cmd, sandbox, timelimit, outputlimit):
         return False
     
     if p.returncode != 0:
-        print(str(compile_err))
         return False
     
     if len(compile_err) > outputlimit*1024:
@@ -118,25 +117,25 @@ class submission:
             self.sandbox_judger.mount()
             self.timeout_command = cfg.get('sandbox', 'timeout_command').split(' ')
             
-            path = '/'
+            path = './'
             with open(str(self.submission_path/('source.'+langinfo['extension'])),'rb') as source_file:
                 self.sandbox_submitted.put_file('/source.'+langinfo['extension'], source_file.read())
             if self.custom_judger_enabled:
                 # copy source file of the custom judger into the sandbox
                 judger_source = cfg.get('multiple_judge', 'source_path')
                 with open(judger_source.replace('{path}', str(self.problem_path)),'rb') as source_file:
-                    self.sandbox_judger.put_file(judger_source.replace('{path}', path), source_file.read())
+                    self.sandbox_judger.put_file(judger_source.replace('{path}', '/'), source_file.read())
                 
                 self.judger_exec = cfg.get('multiple_judge', 'exec_path').replace('{path}', path)
-                self.judger_compile_cmd = cfg.get('multiple_judge', 'compile_cmd').replace('{path}', path)
+                self.judger_compile_cmd = cfg.get('multiple_judge', 'compile_cmd').replace('{path}', path).split(' ')
         else:
             self.sandbox_submitted=subprocess
             self.sandbox_judger=subprocess
             path = str(self.submission_path)
             if self.custom_judger_enabled:
                 self.judger_exec = cfg.get('multiple_judge', 'exec_path').replace('{path}', str(self.problem_path))
-                self.judger_compile_cmd = cfg.get('multiple_judge', 'compile_cmd').replace('{path}', str(self.problem_path))
-        
+                self.judger_compile_cmd = cfg.get('multiple_judge', 'compile_cmd').replace('{path}', str(self.problem_path)).split(' ')
+
         self.execcmd=langinfo['exec'].replace('{path}',path).split()
 
         self.compile_required=langinfo['compile'] is not None
