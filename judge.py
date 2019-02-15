@@ -125,7 +125,7 @@ class submission:
                 # copy source file of the custom judger into the sandbox
                 judger_source = cfg.get('multiple_judge', 'source_path')
                 with open(judger_source.replace('{path}', str(self.problem_path)),'rb') as source_file:
-                    self.sandbox_judger.put_file(judger_source.replace('{path}', path), source_file)
+                    self.sandbox_judger.put_file(judger_source.replace('{path}', path), source_file.read())
                 
                 self.judger_exec = cfg.get('multiple_judge', 'exec_path').replace('{path}', path)
                 self.judger_compile_cmd = cfg.get('multiple_judge', 'compile_cmd').replace('{path}', path)
