@@ -118,7 +118,7 @@ class submission:
             self.sandbox_judger.mount()
             self.timeout_command = cfg.get('sandbox', 'timeout_command').split(' ')
             
-            path = './'
+            path = '/'
             with open(str(self.submission_path/('source.'+langinfo['extension'])),'rb') as source_file:
                 self.sandbox_submitted.put_file('/source.'+langinfo['extension'], source_file.read())
             if self.custom_judger_enabled:
