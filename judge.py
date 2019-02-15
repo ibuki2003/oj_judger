@@ -32,6 +32,7 @@ def compile_multiple_judger(cmd, sandbox, timelimit, outputlimit):
         return False
     
     if p.returncode != 0:
+        print(str(compile_err))
         return False
     
     if len(compile_err) > outputlimit*1024:
@@ -61,20 +62,6 @@ def judge(subid):
     connection.autocommit(True)
     cursor=connection.cursor()
 
-    if cfg.getboolean('sandbox', 'enabled'):
-        import sandbox
-        addition_paths = cfg.get('sandbox', 'addition_path').split(' ')
-        addition_paths.remove('')
-        sb=sandbox.SandBox(
-            cfg.get('sandbox', 'base_dir'),
-            cfg.get('sandbox', 'user'),
-            addition_paths)
-        sb.mount()
-        timeout_command = cfg.get('sandbox', 'timeout_command').split(' ')
-    else:
-        sb=None
-        timeout_command = None
-
     with connection, cursor:
         # get Submission Data
         cursor.execute('SELECT * FROM `submissions` WHERE id=%s',(subid,))
@@ -86,36 +73,70 @@ def judge(subid):
 
         datadir = Path(cfg.get('oj', 'datadir'))
         
-        s=submission(sb, row, langinfo, datadir, timeout_command)
-        result=s.judge(tl,ol,compile_tl,compile_ol, cfg['multiple_judge'])
+        s=submission(row, langinfo, datadir)
+        result=s.judge(tl,ol,compile_tl,compile_ol)
         cursor.execute('update submissions set status=%s,point=%s,exec_time=%s where id=%s', result)
-    if sb is not None:
-        sb.umount()
+    if s.sandbox_enabled:
+        s.sandbox_submitted.umount()
+        s.sandbox_judger.umount()
     print('Done  #', subid, ':', result[0], flush=True)
     return
 
 
 class submission:
-    def __init__(self, sandbox, datas, langinfo, datadir, timeout_command):
+    def __init__(self, datas, langinfo, datadir):
         self.id=datas['id']
         self.problem=datas['problem_id']
         self.time=datas['time']
 
         self.submission_path = datadir/'submissions'/str(self.id)
         self.problem_path = datadir/'problems'/str(self.problem)
-        self.timeout_command = timeout_command
-
-        self.sandbox_enabled = (sandbox is not None)
-        if sandbox is not None:
-            self.sandbox=sandbox
-            with open(str(self.submission_path/('source.'+langinfo['extension'])),'rb') as source_file:
-                sandbox.put_file('/source.'+langinfo['extension'], source_file.read())
-            path = './'
-        else:
-            self.sandbox=subprocess
-            path = str(self.submission_path)
         
-
+        cfg=configparser.ConfigParser()
+        cfg.read('./config.ini', 'UTF-8')
+        
+        if os.path.isfile(cfg.get('multiple_judge', 'source_path').replace('{path}', str(self.problem_path))):
+            # use custom judger
+            self.custom_judger_enabled = True
+        else:
+            self.custom_judger_enabled = False
+        
+        self.sandbox_enabled = cfg.getboolean('sandbox', 'enabled')
+        if self.sandbox_enabled:
+            import sandbox
+            addition_paths = cfg.get('sandbox', 'addition_path').split(' ')
+            addition_paths.remove('')
+            self.sandbox_submitted=sandbox.SandBox(
+                cfg.get('sandbox', 'base_dir'),
+                cfg.get('sandbox', 'user'),
+                addition_paths)
+            self.sandbox_judger=sandbox.SandBox(
+                cfg.get('sandbox', 'base_dir'),
+                cfg.get('sandbox', 'user'),
+                addition_paths+[str(self.problem_path)])
+            self.sandbox_submitted.mount()
+            self.sandbox_judger.mount()
+            self.timeout_command = cfg.get('sandbox', 'timeout_command').split(' ')
+            
+            path = './'
+            with open(str(self.submission_path/('source.'+langinfo['extension'])),'rb') as source_file:
+                self.sandbox_submitted.put_file('/source.'+langinfo['extension'], source_file.read())
+            if self.custom_judger_enabled:
+                # copy source file of the custom judger into the sandbox
+                judger_source = cfg.get('multiple_judge', 'source_path')
+                with open(judger_source.replace('{path}', str(self.problem_path)),'rb') as source_file:
+                    self.sandbox_judger.put_file(judger_source.replace('{path}', path), source_file)
+                
+                self.judger_exec = cfg.get('multiple_judge', 'exec_path').replace('{path}', path)
+                self.judger_compile_cmd = cfg.get('multiple_judge', 'compile_cmd').replace('{path}', path)
+        else:
+            self.sandbox_submitted=subprocess
+            self.sandbox_judger=subprocess
+            path = str(self.submission_path)
+            if self.custom_judger_enabled:
+                self.judger_exec = cfg.get('multiple_judge', 'exec_path').replace('{path}', str(self.problem_path))
+                self.judger_compile_cmd = cfg.get('multiple_judge', 'compile_cmd').replace('{path}', str(self.problem_path))
+        
         self.execcmd=langinfo['exec'].replace('{path}',path).split()
 
         self.compile_required=langinfo['compile'] is not None
@@ -132,9 +153,9 @@ class submission:
             # disable Ctrl-C for subprocess
             if sys.platform.startswith('win'):
                 # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
-                p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE, creationflags=0x00000200)
+                p = self.sandbox_submitted.Popen(self.compilecmd, stderr=subprocess.PIPE, creationflags=0x00000200)
             else:
-                p = self.sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE, start_new_session=True)
+                p = self.sandbox_submitted.Popen(self.compilecmd, stderr=subprocess.PIPE, start_new_session=True)
             
             compile_err = p.communicate(timeout=timelimit)[1]
         except subprocess.TimeoutExpired:
@@ -153,17 +174,17 @@ class submission:
             
         return (p.returncode == 0)
 
-    def judge_one_with_custom_judger(self, testcase, timelimit, outputlimit, judger_exec):
+    def judge_one_with_custom_judger(self, testcase, timelimit, outputlimit):
         try:
             # start the judger first
             testcase_out_path = str(testcase.parents[1]/'out'/testcase.name)
             # disable Ctrl-C for subprocess
             if sys.platform.startswith('win'):
                 # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
-                judger = self.sandbox.Popen([judger_exec, str(testcase), testcase_out_path],
+                judger = self.sandbox_judger.Popen([self.judger_exec, str(testcase), testcase_out_path],
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=0x00000200)
             else:
-                judger = self.sandbox.Popen([judger_exec, str(testcase), testcase_out_path],
+                judger = self.sandbox_judger.Popen([self.judger_exec, str(testcase), testcase_out_path],
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
             
             # run submitted one
@@ -174,10 +195,10 @@ class submission:
             # disable Ctrl-C for subprocess
             if sys.platform.startswith('win'):
                 # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
-                submitted = self.sandbox.Popen(additional_command+self.execcmd, stdin=judger.stdout, stdout=judger.stdin,
+                submitted = self.sandbox_submitted.Popen(additional_command+self.execcmd, stdin=judger.stdout, stdout=judger.stdin,
                     creationflags=0x00000200)
             else:
-                submitted = self.sandbox.Popen(additional_command+self.execcmd, stdin=judger.stdout, stdout=judger.stdin,
+                submitted = self.sandbox_submitted.Popen(additional_command+self.execcmd, stdin=judger.stdout, stdout=judger.stdin,
                     start_new_session=True)
             
             starttime=time()
@@ -216,10 +237,10 @@ class submission:
                 # disable Ctrl-C for subprocess
                 if sys.platform.startswith('win'):
                     # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
-                    p = self.sandbox.Popen(additional_command+self.execcmd, stdin=input_file, stdout=subprocess.PIPE,
+                    p = self.sandbox_submitted.Popen(additional_command+self.execcmd, stdin=input_file, stdout=subprocess.PIPE,
                         creationflags=0x00000200)
                 else:
-                    p = self.sandbox.Popen(additional_command+self.execcmd, stdin=input_file, stdout=subprocess.PIPE,
+                    p = self.sandbox_submitted.Popen(additional_command+self.execcmd, stdin=input_file, stdout=subprocess.PIPE,
                         start_new_session=True)
                 starttime=time()
                 out = p.communicate(timeout=timelimit)[0]
@@ -244,7 +265,7 @@ class submission:
                     return ("WA",exectime)
             return ("AC",exectime)
 
-    def judge(self, timelimit, outputlimit, compile_timelimit, compile_outputlimit, multiple_judge_cfg):
+    def judge(self, timelimit, outputlimit, compile_timelimit, compile_outputlimit):
         # delete before files
         for file in [
                 self.submission_path/'judge_log.txt',
@@ -254,17 +275,10 @@ class submission:
         if self.compile(compile_timelimit, compile_outputlimit)==False:
             return ('CE',0,None,self.id)
             
-        
-        if os.path.isfile(multiple_judge_cfg['source_path'].replace('{path}', str(self.problem_path))):
-            # multiple judge
-            if not os.path.isfile(multiple_judge_cfg['exec_path'].replace('{path}', str(self.problem_path))):
-                # only if the judger is not compiled yet
-                if not compile_multiple_judger(multiple_judge_cfg['compile_cmd'].replace('{path}', str(self.problem_path)),
-                                               self.sandbox, compile_timelimit, compile_outputlimit):
-                    return ('IE',0,None,self.id)
-            judger_exec = multiple_judge_cfg['exec_path'].replace('{path}', str(self.problem_path))
-        else:
-            judger_exec = None
+        if self.custom_judger_enabled:
+            if not compile_multiple_judger(self.judger_compile_cmd, self.sandbox_judger,
+                compile_timelimit, compile_outputlimit):
+                return ('IE',0,None,self.id)
 
         try: # Judge Start!
             point=0
@@ -304,10 +318,10 @@ class submission:
 
             exectime_max = 0
             for testcase in testcaselist: # judge All
-                if judger_exec is None:
-                    ret, exectime=self.judge_one(testcase, timelimit, outputlimit)
+                if self.custom_judger_enabled:
+                    ret, exectime=self.judge_one_with_custom_judger(testcase, timelimit, outputlimit)
                 else:
-                    ret, exectime=self.judge_one_with_custom_judger(testcase, timelimit, outputlimit, judger_exec)
+                    ret, exectime=self.judge_one(testcase, timelimit, outputlimit)
                 if exectime is not None :
                     exectime_max = max(exectime_max, exectime)
                 if ret in ['RE','OLE','TLE']:
