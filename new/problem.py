@@ -16,7 +16,7 @@ class problem:
                 testcaselist.extend(tcset['problems'])
             testcaselist=[(self.path/'in'/filename) for filename in set(testcaselist)] # remove duplication, make Path Obj
         else:
-            testcaselist = (self.path/'in').glob('*')
+            testcaselist = list((self.path/'in').glob('*'))
             testcasenamelist = [file.name for file in testcaselist]
             testcasenamelist.sort()
             
@@ -36,9 +36,10 @@ class problem:
             self.judger=self.path/'judge'
 
     def compile_judge(self, cfg):
-        if self.judger.exists():
-            return True
         if self.judge_type!='special':
+            return True
+        if self.judger.exists():
+            print('yayyyayya')
             return True
         try:
             # disable Ctrl-C for subprocess

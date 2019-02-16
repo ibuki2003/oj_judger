@@ -5,6 +5,7 @@ import subprocess
 from pipe import pipe
 from time import time
 import traceback
+import json
 
 class submission:
     def __init__(self, sub_id, cfg, cursor):
@@ -24,7 +25,7 @@ class submission:
 
         self.compile_required=self.lang['compile'] is not None
         if(self.compile_required):
-            self.compilecmd=self.lang['compile'].replace('{path}',self.path).split()
+            self.compilecmd=self.lang['compile'].replace('{path}',str(self.path)).split()
         
         self.sandbox_enabled = self.cfg.getboolean('sandbox', 'enabled')
     
@@ -80,7 +81,7 @@ class submission:
                 sandbox_judge = subprocess
                 timeout_command = None
                 path = str(self.path)
-                judger_path = str(self.problem.path)
+                judger_path = str(self.problem.path) + '/judge'
 
             if self.compile(sandbox_submission)==False:
                 return ('CE', 0, None)
@@ -145,8 +146,9 @@ class submission:
                     'time': exectime,
                 })
             result_data['result'].sort(key=lambda x: x['name'])
-
-            for tcset in tcsets: # calculate point
+            
+            point = 0
+            for tcset in self.problem.tcsets: # calculate point
                 AllAC=True
                 for testcase in tcset['problems']:
                     if problem_results[testcase]['status']!='AC':
@@ -172,7 +174,7 @@ class submission:
             print(traceback.format_exc())
             return ('IE',point,None)
         else:
-            with open(str(self.submission_path/'judge_log.json'),'w') as logfile:
+            with open(str(self.path/'judge_log.json'),'w') as logfile:
                 logfile.write(json.dumps(result_data))
             if stats['RE']:
                 return ('RE',point,None)

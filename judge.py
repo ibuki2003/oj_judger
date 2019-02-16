@@ -9,7 +9,6 @@ from time import time
 import json
 import signal
 
-
 def kill_child_processes(process):
     if sys.platform.startswith('win'):
         # p.kill() doesn't seem to kill the child processes on Windows

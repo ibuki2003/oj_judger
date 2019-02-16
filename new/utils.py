@@ -1,6 +1,5 @@
 import sys
 import configparser
-import sandbox
 import subprocess
 
 def kill_child_processes(process):
@@ -11,6 +10,7 @@ def kill_child_processes(process):
         process.kill()
 def newSandbox(cfg):
     if cfg.getboolean('sandbox', 'enabled'):
+        import sandbox
         addition_paths = cfg.get('sandbox', 'addition_path').split(' ')
         addition_paths.remove('')
         sb=sandbox.SandBox(
@@ -21,4 +21,3 @@ def newSandbox(cfg):
         return sb
     else:
         return None
-
