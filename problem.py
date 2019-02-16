@@ -38,14 +38,12 @@ class problem:
     def compile_judge(self, cfg):
         if self.judge_type!='special':
             return True
-        if self.judger.exists():
-            print('yayyyayya')
+        if self.judger.exists() or Path(str(self.judger)+'.exe').exists():
             return True
         try:
             # disable Ctrl-C for subprocess
-            # TODO:
             cmd=cfg.get('multiple_judge', 'compile_cmd').split(' ') + [str(self.path/'judge.cpp'), '-o', str(self.judger)]
-            p = subprocess.Popen(cmd, stderr=subprocess.PIPE, start_new_session=True)
+            p = utils.Popen(subprocess, stderr=subprocess.PIPE, start_new_session=True)
             
             compile_err = p.communicate(timeout=cfg.getint('limit', 'compile_time'))[1]
         except subprocess.TimeoutExpired:

@@ -8,6 +8,19 @@ def kill_child_processes(process):
         subprocess.run(['TASKKILL', '/F', '/T', '/PID', str(process.pid)], stdout=subprocess.DEVNULL)
     else:
         process.kill()
+
+def Popen(sandbox, *args, **kwargs):
+	if 'start_new_session' in kwargs and kwargs['start_new_session']:
+		# disable Ctrl-C
+		if sys.platform.startswith('win'):
+			kwargs.pop('start_new_session')
+			# https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
+			return sandbox.Popen(*args, creationflags=0x00000200, **kwargs)
+		else:
+			return sandbox.Popen(*args, **kwargs)
+	else:
+		return sandbox.Popen(*args, **kwargs)
+
 def newSandbox(cfg):
     if cfg.getboolean('sandbox', 'enabled'):
         import sandbox

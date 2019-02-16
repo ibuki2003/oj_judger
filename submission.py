@@ -37,8 +37,7 @@ class submission:
             
             try:
                 # disable Ctrl-C for subprocess
-                # TODO: start new session windows
-                p = sandbox.Popen(self.compilecmd, stderr=subprocess.PIPE, start_new_session=True)
+                p = utils.Popen(sandbox, self.compilecmd, stderr=subprocess.PIPE, start_new_session=True)
                 
                 compile_err = p.communicate(timeout=self.cfg.getint('limit', 'compile_time'))[1]
             except subprocess.TimeoutExpired:
@@ -199,8 +198,7 @@ class submission:
                 
                 starttime=time()
                 # disable Ctrl-C for subprocess
-                # TODO:
-                p = sandbox.Popen(additional_command + self.lang['exec'].replace('{path}',path).split(), stdin=input_file, stdout=subprocess.PIPE,
+                p = utils.Popen(sandbox, additional_command + self.lang['exec'].replace('{path}',path).split(), stdin=input_file, stdout=subprocess.PIPE,
                     start_new_session=True)
                 
                 out = p.communicate(timeout=self.cfg.getint('limit', 'time'))[0]
@@ -233,8 +231,7 @@ class submission:
             try:
                 # start the judger first
                 # disable Ctrl-C for subprocess
-                # TODO:
-                judger = sandbox_judge.Popen([judger_path, testcase_in, testcase_out],
+                judger = utils.Popen(sandbox_judge, [judger_path, testcase_in, testcase_out],
                     stdin=outp.r, stdout=inpp.w, stderr=subprocess.PIPE, start_new_session=True)
                 
                 # run submitted one
@@ -245,8 +242,7 @@ class submission:
                 
                 starttime=time()
                 # disable Ctrl-C for subprocess
-                # TODO:
-                submitted = sandbox_submission.Popen(additional_command + self.lang['exec'].replace('{path}',path).split(), stdin=inpp.r, stdout=outp.w,
+                submitted = utils.Popen(sandbox_submission, additional_command + self.lang['exec'].replace('{path}',path).split(), stdin=inpp.r, stdout=outp.w,
                     start_new_session=True)
                 
                 # submitted.communicate(timeout=timelimit)
