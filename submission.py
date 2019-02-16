@@ -22,12 +22,14 @@ class submission:
         
         self.cursor.execute('SELECT * FROM `langs` WHERE id=%s', (datas['lang_id'],))
         self.lang=self.cursor.fetchone()
-
-        self.compile_required=self.lang['compile'] is not None
-        if(self.compile_required):
-            self.compilecmd=self.lang['compile'].replace('{path}',str(self.path)).split()
         
         self.sandbox_enabled = self.cfg.getboolean('sandbox', 'enabled')
+
+        self.compile_required=self.lang['compile'] is not None
+        source_dir = '/' if self.sandbox_enabled else str(self.path)
+        if(self.compile_required):
+            self.compilecmd=self.lang['compile'].replace('{path}', source_dir).split()
+        
     
     def compile(self, sandbox):
         if not self.compile_required: # no compile
