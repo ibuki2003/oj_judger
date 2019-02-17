@@ -42,7 +42,7 @@ class problem:
             return True
         try:
             # disable Ctrl-C for subprocess
-            cmd=cfg.get('multiple_judge', 'compile_cmd').split(' ') + [str(self.path/'judge.cpp'), '-o', str(self.judger)]
+            cmd=cfg.get('special_judge', 'compile_cmd').split(' ') + [str(self.path/'judge.cpp'), '-o', str(self.judger)]
             p = utils.Popen(subprocess, cmd, stderr=subprocess.PIPE, start_new_session=True)
             
             compile_err = p.communicate(timeout=cfg.getint('limit', 'compile_time'))[1]
