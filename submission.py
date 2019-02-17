@@ -85,10 +85,10 @@ class submission:
                 judger_path = str(self.problem.path) + '/judge'
 
             if self.compile(sandbox_submission)==False:
+                sandbox_submission.umount()
+                if self.problem.judge_type=='special':
+                    sandbox_judge.umount()
                 return ('CE', 0, None)
-
-
-            
             
             stats={
                 'RE': False,
@@ -135,6 +135,9 @@ class submission:
                         'time': exectime
                     }
                 elif stat=='IE':
+                    sandbox_submission.umount()
+                    if self.problem.judge_type=='special':
+                        sandbox_judge.umount()
                     return ('IE',0,None)
                 else:
                     problem_results[testcase.name]={
