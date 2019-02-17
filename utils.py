@@ -21,10 +21,10 @@ def Popen(sandbox, *args, **kwargs):
 	else:
 		return sandbox.Popen(*args, **kwargs)
 
-def newSandbox(cfg):
+def newSandbox(cfg, addition_paths=[]):
     if cfg.getboolean('sandbox', 'enabled'):
         import sandbox
-        addition_paths = cfg.get('sandbox', 'addition_path').split(' ')
+        addition_paths += cfg.get('sandbox', 'addition_path').split(' ')
         addition_paths.remove('')
         sb=sandbox.SandBox(
             cfg.get('sandbox', 'base_dir'),

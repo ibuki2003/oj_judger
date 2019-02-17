@@ -140,6 +140,8 @@ class SandBox():
 
         return subprocess.Popen(cmd_args, shell=False, **kwargs)
 
-    def put_file(self, filepath, content):
+    def put_file(self, filepath, content, permission=0o644):
         with open(self.base_dir+filepath, 'wb') as f:
             f.write(content)
+        os.chmod(self.base_dir+filepath, permission)
+

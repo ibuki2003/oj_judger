@@ -71,9 +71,9 @@ class submission:
                     sandbox_submission.put_file('/source.'+self.lang['extension'], source_file.read())
                 
                 if self.problem.judge_type=='special':
-                    sandbox_judge=utils.newSandbox(self.cfg)
+                    sandbox_judge=utils.newSandbox(self.cfg, [str(self.problem.path)])
                     with open(str(self.problem.judger),'rb') as source_file:
-                        sandbox_submission.put_file('/judge', source_file.read())
+                        sandbox_judge.put_file('/judge', source_file.read(), 0o755)
                             
                 path = './'
                 judger_path = './judge'
@@ -147,6 +147,11 @@ class submission:
                     'time': exectime,
                 })
             result_data['result'].sort(key=lambda x: x['name'])
+
+            if self.sandbox_enabled:
+                sandbox_submission.umount()
+                if self.problem.judge_type == 'special':
+                    sandbox_judge.umount()
             
             point = 0
             for tcset in self.problem.tcsets: # calculate point
@@ -173,7 +178,7 @@ class submission:
 
         except:
             print(traceback.format_exc())
-            return ('IE',point,None)
+            return ('IE',0,None)
         else:
             with open(str(self.path/'judge_log.json'),'w') as logfile:
                 logfile.write(json.dumps(result_data))
