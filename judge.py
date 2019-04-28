@@ -2,6 +2,8 @@ from submission import submission
 import configparser
 import signal
 import pymysql
+import os
+import sys
 
 def judge(subid):
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
@@ -9,7 +11,14 @@ def judge(subid):
     print('Start #', subid, flush=True)
     cfg=configparser.ConfigParser()
     cfg.read('./config.ini', 'UTF-8')
-     
+
+    if cfg.getboolean('sandbox', 'enabled'):
+        if os.getgid() != 0:
+            cfg.set('sandbox', 'enabled', 'false')
+            sys.stderr.write('using sandox requires root privileges. set disabled automatically.')
+            sys.stderr.flush()
+            print(cfg.getboolean('sandbox', 'enabled'))
+
     connection = pymysql.connect(
         host    =cfg.get('database', 'host'),
         user    =cfg.get('database', 'user'),
@@ -19,7 +28,7 @@ def judge(subid):
         cursorclass=pymysql.cursors.DictCursor)
     connection.autocommit(True)
     cursor=connection.cursor()
- 
+
     with connection, cursor:
         s=submission(subid, cfg, cursor)
         result=s.judge()
