@@ -33,6 +33,7 @@ class SandBox():
         cfg=configparser.ConfigParser()
         cfg.read('./config.ini', 'UTF-8')
         self.addition_path=addition_path
+        self.mounted=[] # list of real paths
 
     def __enter__(self):
         self.mount()
@@ -41,6 +42,32 @@ class SandBox():
     def __exit__(self, ex_type, ex_value, trace):
         self.umount()
         pass
+
+    def __mount_dir(self, path):
+        if path in self.mounted: # already mounted
+            return
+        self.mounted.append(path)
+        virtual_path = self.base_dir + path
+
+        if (not path.startswith('/dev')) and os.path.islink(path): # device should be mounted anytime
+            shutil.copy(path, virtual_path, follow_symlinks=False)
+        elif os.path.isdir(path):
+            virtual_path=self.base_dir + path
+            if not os.path.exists(virtual_path):
+                os.makedirs(virtual_path)
+            if not os.path.isdir(virtual_path):
+                os.remove(virtual_path)
+                os.makedirs(virtual_path)
+
+            execCommand('mount -n --bind -o ro %s %s' % (path, virtual_path))
+        else: # file or device
+            virtual_path=self.base_dir + path
+            if not os.path.exists(virtual_path):
+                open(virtual_path, 'a').close()
+            if os.path.isdir(virtual_path):
+                os.removedirs(virtual_path)
+                open(virtual_path, 'a').close()
+            execCommand('mount -n --bind %s %s' % (path, virtual_path))
 
     def mount(self):
         if not os.path.exists(self.base_dir):
@@ -54,27 +81,11 @@ class SandBox():
         if not os.path.exists(self.base_dir + '/dev'):
             os.mkdir(self.base_dir + '/dev')
         for i in AVAILABLE_DEVICES:
-            path = self.base_dir + '/dev/' + i
-
-            if not os.path.exists(path):
-                open(path, 'a').close()
-            if os.path.isdir(path):
-                os.removedirs(path)
-                open(path, 'a').close()
-
-            execCommand('mount -n --bind /dev/%s %s' % (i, path))
+            self.__mount_dir('/dev/' + i)
 
         # Mount allowed directory
         for i in AVAILABLE_PATHS + self.addition_path:
-            path = self.base_dir + i
-
-            if not os.path.exists(path):
-                os.makedirs(path)
-            if not os.path.isdir(path):
-                os.remove(path)
-                os.makedirs(path)
-
-            execCommand('mount -n --bind -o ro %s %s' % (i, path))
+            self.__mount_dir(i)
 
         # Mount tmp directory
         path = self.base_dir + '/tmp'
@@ -91,39 +102,27 @@ class SandBox():
         if os.path.exists(path):
             shutil.rmtree(path)
 
-        # Unmount allowed directory
-        for i in AVAILABLE_PATHS + self.addition_path:
+        for i in self.mounted:
             path = self.base_dir + i
-
             while True:
-                while execCommand('umount -l %s' % (path)):
-                    pass
+                if not os.path.islink(path):
+                    while execCommand('umount -l %s' % (path)):
+                        pass
                 try:
-                    delete_path = i
-                    while delete_path != '/':
-                        if os.listdir(self.base_dir + delete_path):
-                            break
-                        os.rmdir(self.base_dir + delete_path)
-                        delete_path = os.path.dirname(delete_path)
+                    if os.path.islink(path) or os.path.isfile(path):
+                        os.unlink(path)
+                    else:
+                        delete_path = i
+                        while delete_path != '/':
+                            if os.listdir(self.base_dir + delete_path):
+                                break
+                            os.rmdir(self.base_dir + delete_path)
+                            delete_path = os.path.dirname(delete_path)
                 except OSError as e:
                     if re.match(r'\[Errno 16\] Device or resource busy', str(e)):
+                        sleep(1)
                         continue
                 break
-
-        for i in AVAILABLE_DEVICES:
-            path = self.base_dir + '/dev/' + i
-
-            while True:
-                while execCommand('umount -l %s' % (path)):
-                    pass
-                try:
-                    os.remove(path)
-                except OSError as e:
-                    if re.match(r'\[Errno 16\] Device or resource busy', str(e)):
-                        continue
-                break
-                
-        os.rmdir(self.base_dir + '/dev')
 
         shutil.rmtree(self.base_dir)
 
