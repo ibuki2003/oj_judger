@@ -10,16 +10,16 @@ def kill_child_processes(process):
         process.kill()
 
 def Popen(sandbox, *args, **kwargs):
-	if 'start_new_session' in kwargs and kwargs['start_new_session']:
-		# disable Ctrl-C
-		if sys.platform.startswith('win'):
-			kwargs.pop('start_new_session')
-			# https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
-			return sandbox.Popen(*args, creationflags=0x00000200, **kwargs)
-		else:
-			return sandbox.Popen(*args, **kwargs)
-	else:
-		return sandbox.Popen(*args, **kwargs)
+    if 'start_new_session' in kwargs and kwargs['start_new_session']:
+        # disable Ctrl-C
+        if sys.platform.startswith('win'):
+            kwargs.pop('start_new_session')
+            # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
+            return sandbox.Popen(*args, creationflags=0x00000200, **kwargs)
+        else:
+            return sandbox.Popen(*args, **kwargs)
+    else:
+        return sandbox.Popen(*args, **kwargs)
 
 def newSandbox(cfg, addition_paths=[]):
     if cfg.getboolean('sandbox', 'enabled'):
