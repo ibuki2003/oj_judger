@@ -241,17 +241,17 @@ class submission:
         # make pipe to communicate
         with pipe() as inpp, pipe() as outp:
             try:
-                # start the judger first
-                # disable Ctrl-C for subprocess
-                judger = utils.Popen(sandbox_judge, [judger_path, testcase_in, testcase_out],
-                    stdin=outp.r, stdout=inpp.w, stderr=subprocess.PIPE, start_new_session=True)
-
-                # run submitted one
                 additional_command = []
                 if self.sandbox_enabled :
                     additional_command += timeout_command
                     additional_command.append(str(self.cfg.getint('limit', 'time')+1))
 
+                # start the judger first
+                # disable Ctrl-C for subprocess
+                judger = utils.Popen(sandbox_judge, additional_command + [judger_path, testcase_in, testcase_out],
+                    stdin=outp.r, stdout=inpp.w, stderr=subprocess.PIPE, start_new_session=True)
+
+                # run submitted one
                 starttime=time()
                 # disable Ctrl-C for subprocess
                 submitted = utils.Popen(sandbox_submission, additional_command + self.lang['exec'].replace('{path}',path).split(), stdin=inpp.r, stdout=outp.w,
