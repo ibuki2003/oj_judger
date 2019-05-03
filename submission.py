@@ -269,7 +269,7 @@ class submission:
                 return ("TLE",None)
 
         try: # wait for judger for (timelimit) secs
-            result = judger.communicate(timeout=self.cfg.getint('limit', 'output'))[1]
+            result = judger.communicate(timeout=self.cfg.getint('limit', 'time'))[1]
         except subprocess.TimeoutExpired:
             utils.kill_child_processes(judger)
             return ("IE",None) # judger TLE
