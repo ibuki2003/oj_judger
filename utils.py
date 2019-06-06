@@ -13,6 +13,9 @@ def Popen(sandbox, *args, **kwargs):
     if 'start_new_session' in kwargs and kwargs['start_new_session']:
         # disable Ctrl-C
         if sys.platform.startswith('win'):
+            import ctypes
+            SEM_NOGPFAULTERRORBOX = 0x0002 # From MSDN
+            ctypes.windll.kernel32.SetErrorMode(SEM_NOGPFAULTERRORBOX);
             kwargs.pop('start_new_session')
             # https://msdn.microsoft.com/en-us/library/windows/desktop/ms684863(v=vs.85).aspx
             return sandbox.Popen(*args, creationflags=0x00000200, **kwargs)
