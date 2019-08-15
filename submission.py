@@ -264,9 +264,12 @@ class submission:
                     utils.kill_child_processes(judger)
                     return ("RE",None)
             except subprocess.TimeoutExpired:
+                res = ("TLE",None)
+                if judger.poll() is not None and judger.returncode != 0:
+                    res = ("IE", None)
                 utils.kill_child_processes(submitted)
                 utils.kill_child_processes(judger)
-                return ("TLE",None)
+                return res
 
         try: # wait for judger for (timelimit) secs
             result = judger.communicate(timeout=self.cfg.getint('limit', 'time'))[1]
