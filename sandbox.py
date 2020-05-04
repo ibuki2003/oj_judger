@@ -71,7 +71,7 @@ class SandBox():
 
     def mount(self):
         if not os.path.exists(self.base_dir):
-            os.mkdir(self.base_dir)
+            os.makedirs(self.base_dir)
         
         # Change permission
         uid = pwd.getpwnam(self.sandbox_user)
