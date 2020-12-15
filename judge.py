@@ -29,9 +29,13 @@ def judge(subid):
     connection.autocommit(True)
     cursor=connection.cursor()
 
-    with connection, cursor:
+    try:
         s=submission(subid, cfg, cursor)
         result=s.judge()
         cursor.execute('update submissions set status=%s,point=%s,exec_time=%s where id=%s', result + (subid, ))
+    finally:
+        cursor.close()
+        connection.close()
+
     print('Done  #', subid, ':', result[0], flush=True)
     return
